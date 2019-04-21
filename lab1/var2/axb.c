@@ -253,7 +253,6 @@ int main(int argc , char** argv){
  				end = 1;
 				printf("Acc: %lf\n" , a / VEC_B_ABSOLUTE);
 			} 	
-			//printf("Acc: %lf\n" , a / VEC_B_ABSOLUTE);
 		}
 	
 

@@ -72,11 +72,6 @@ double checkAccuracy(double* Ax , double* b , int size){
 	double a1 = 0 , a2 = 0;
 	absoluteValue(Ax , size , &a1);
 	absoluteValue(b , size , &a2);
-	if(0 == a2){
-		 printf("|b| = 0?\n");
-		 exit(0);
-	}
-
 	return a1 / a2;
 }
 
@@ -231,8 +226,6 @@ int main(int argc , char** argv){
 			if(check < 0.00001){
 				end = 1;
 				printf("res: %lf\n", check);
-			}else{
-				//printf("%lf\n", check);
 			}
 		}
 		MPI_Bcast(&end , 1 , MPI_INT, 0 , MPI_COMM_WORLD);

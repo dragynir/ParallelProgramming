@@ -155,6 +155,7 @@ void showSlice(double* l_slice, int slice_x, int slice_y , int slice_z){
 void doIteration(double* l_slice, double* keep_l_slice, int z_center, int slice_x, int slice_y,
 	double hx, double hy, double hz, double MULTI_KF, double* model_space){
 
+
 	/*Тут нет проверки на выход за границы зоны->
 	сигфолты велком.Непонятно как использовать формулу на границе*/
 	//printf("%lf\n", MULTI_KF);
@@ -405,15 +406,20 @@ int main(int argc , char** argv){
 		
 
 
-		/*if(m_rank == 0){
+		if(m_rank == 0){
 			printf("%lf --- %d\n", diff , count);
 
-		}*/
+		}
 		if(end){
+			if(m_rank == 0){
+				printf("%lf\n", diff);
+				/*showSlice(l_slice, slice_x, slice_y , slice_z);
+				printf("-------------------\n");
+				showSlice(keep_l_slice, slice_x, slice_y , slice_z);*/
+			}
 			end_t = MPI_Wtime();
 			if(0 == m_rank){
-				printf("Diff: %lf\n", diff);
-				printf("Proc: %d , Time taken: %f Iterations: %d \n" , p_count, end_t - start_t , count);
+				printf("Time taken: %f Iterations: %d \n" , end_t - start_t , count);
 			}
 			break;
 		}
@@ -427,6 +433,7 @@ int main(int argc , char** argv){
 		double* ptr = keep_l_slice;
 		keep_l_slice = l_slice;
 		l_slice = ptr;
+
 	}
 
 	free(l_slice);
