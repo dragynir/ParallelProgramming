@@ -221,24 +221,21 @@ int main(int argc , char** argv){
 		if(check < 0.00001){
 			printf("res: %lf\n", check);
 
-			//clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+		
 			gettimeofday(&end, NULL);
 
 			double delta = ((end.tv_sec  - start.tv_sec) * 1000000u + 
          		end.tv_usec - start.tv_usec) / 1.e6;
- 			//printf("Time taken: %lf sec. ",
- 					//end.tv_sec-start.tv_sec + 0.000000001*(end.tv_nsec-start.tv_nsec));
+ 			
 			printf("Time taken: %lf sec. Iterations: %d \n" ,delta ,  count);
 
-		    //showVector(vec_x , MATRIX_SIZE);
+		    
 			{
 			free(matrix_a);free(vec_keep);
 			free(vec_x);free(vec_b);
 			free(vec_y);
 			}
 			return 0;
-		}else{
-			//printf("%lf\n", check);
 		}
 		
 		//calculate A * y(n)

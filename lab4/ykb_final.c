@@ -5,10 +5,12 @@
 #include<time.h>
 #include<string.h>
 
+
+
+//Request ЧТОТОНЕТАК
+
 #define E 10e-8
 #define A 10e+5
-
-//512 384 256 : 36.6 sec
 
 double fi(double x, double y, double z){
 	return x*x + y*y + z*z;
@@ -41,22 +43,17 @@ void defineSlices(int* displs, int* counts, int per_proc,
 }
 
 
-//Функция заполняет слой
-// Каждому узлу присваивает конкретную точку
-//Иницилизирует начальные значения
 void fillSlice(double* l_slice, double* model_space, double* space_displ, 
  int* node_counts, double slice_start_z, double slice_end_z, int p_count)
 
 {
 	//заполнение идет с верней грани слоя
 	double curr_z_start = model_space[5] -  slice_start_z * space_displ[2];
-	/*printf("%lf\n", curr_z_start );
-	return;*/
+
 
 	int slice_z = slice_end_z - slice_start_z + 1;
 	int slice_x = node_counts[0];
 	int slice_y = node_counts[1];
-	//printf("%d %d %d\n", slice_x , slice_y , slice_z);
 	double value = 0;
 	for (int i = 0; i < slice_z; ++i)
 	{
@@ -75,36 +72,26 @@ void fillSlice(double* l_slice, double* model_space, double* space_displ,
 
 		double curr_x = 0;
 		double curr_y = 0;
-		//цикл по x
 		for (int j = 0; j < slice_x; ++j)
 		{
 			curr_x = space_displ[0] * j + model_space[0];
-			//цикл по y
 			for (int k = 0; k < slice_y; ++k)
 			{
 				curr_y = space_displ[1] * k + model_space[2];
 	
-
-				//printf("(%lf , %lf , %lf) ", curr_x, curr_y, curr_z);
-
 				if(slice_start_z == 0 && i == 0){
 					value = fi(curr_x , curr_y , curr_z);
-					//printf("+\n");
 				}else if(slice_end_z == node_counts[2] - 1 && i == slice_z - 1){
 					value = fi(curr_x , curr_y , curr_z);
-					//printf("+\n");
 				}
 				else if(k == 0 || k == slice_y - 1 || j == 0 || j == slice_x - 1){
 					value = fi(curr_x , curr_y , curr_z);
-					//printf("+\n");
 				}else{
-					value = 0;//значение по умолчанию
+					value = 0;
 				}
 				l_slice[i * slice_x * slice_y + j * slice_y + k] = value;
 			}
-			//printf("\n");
 		}
-		//printf("\n\n");
 	}
 }
 
@@ -236,65 +223,29 @@ int main(int argc , char** argv){
 
 	slice_z = slice_end_z  - slice_start_z + 1;
 
-	//printf("%d\n", slice_z );
-	//return 0;
+	
 
 	double* l_slice = (double*)malloc(Nx * Ny * slice_z * sizeof(double));
 	double* keep_l_slice = (double*)malloc(Nx * Ny * slice_z * sizeof(double));
 	
-
-
-
-	//задаем значение каждому узлу
 	fillSlice(l_slice, model_space, space_displ, node_counts, slice_start_z, slice_end_z ,p_count);
 
-	//сужаем область моделирования
 	int slice_x = node_counts[0];
 	int slice_y = node_counts[1];
 
-	/*if(m_rank ==0)
-	showSlice(l_slice, slice_x, slice_y , slice_z);
-	return 0;*/
-
 	int count = 0;
-
-	/*printf("rank: %d , z_s: %d , z_e: %d ,  slice_z: %d,\n",m_rank
-	 , slice_start_z , slice_end_z , slice_z);*/
-	//return 0;
-	double* fi_diff = (double*)malloc(sizeof(double) * (p_count));
-
+	
 	double start_t = MPI_Wtime() , end_t = 0;
 	while(1){
-		//printf("LOL1\n");
 		++count;
-		
-		//TODO вычисление боковых значений
-		/*if(count == 2){
-			if(m_rank ==0)
-				showSlice(l_slice, slice_x, slice_y , slice_z);
-			break;
-		}*/
-		//считаем боковые значения
+	
 
-		//если каждый слой по 1 много пересчета добавить проверки
+
 		doIteration(l_slice, keep_l_slice, 1, slice_x, slice_y , hx , hy , hz, MULTI_KF, model_space);
 		doIteration(l_slice, keep_l_slice,  slice_z - 2, slice_x, slice_y , hx , hy , hz, MULTI_KF, model_space);
-		//if(m_rank ==0)
-		//	showSlice(keep_l_slice, slice_x, slice_y , slice_z);
-		//return 0;
-
-
-
-		//------------------OK
-
-
-		//TODO асинхронная передача
-
-
-		//Передача не MPI_DOUBLE ,  double
-
-
 		
+
+
 		if(slice_start_z == 0){
 			memcpy(keep_l_slice , l_slice , slice_x * slice_y * sizeof(double));
 		}else if(slice_end_z == node_counts[2] - 1){
@@ -302,59 +253,41 @@ int main(int argc , char** argv){
 			  , l_slice + (slice_z - 1) *  slice_x * slice_y, slice_x * slice_y *sizeof(double));
 		}
 
-		//if(m_rank ==0)
-		//showSlice(keep_l_slice, slice_x, slice_y , slice_z);
-		//return 0;
+
+		MPI_Request requests[4];
+		MPI_Status statuses[4];
 		
-		MPI_Request requests[2];
+		
 		if(p_count == 1){
 			memcpy(keep_l_slice , l_slice , slice_x * slice_y * sizeof(double));
 			memcpy(keep_l_slice + (slice_z - 1) *  slice_x * slice_y
 			  , l_slice + (slice_z - 1) *  slice_x * slice_y, slice_x * slice_y *sizeof(double));
 		}else{
-			//printf("Done\n");
-				///////////
-			//если не последний ранг
-			//Передача вниз
-			if(m_rank != p_count - 1){
-				//printf("Done\n");
-			MPI_Isend(keep_l_slice + (slice_z - 2) *  slice_x * slice_y, slice_x * slice_y, MPI_DOUBLE,
-			  m_rank + 1, 1324, MPI_COMM_WORLD, &requests[0]);
-			}
 
-			//если не первый процесс
+			//Передача  вверх
 			if(m_rank != 0){
-				//printf("Done\n");
-			MPI_Irecv(keep_l_slice, slice_x * slice_y, MPI_DOUBLE,
-			  m_rank - 1, 1324, MPI_COMM_WORLD, &requests[0]);
-			}
-
-
-		
-	///////////
-
-			//если не первый процесс
-			if(m_rank != 0){
-			MPI_Isend(keep_l_slice + slice_x * slice_y, slice_x * slice_y, MPI_DOUBLE,
+				MPI_Isend(keep_l_slice + slice_x * slice_y, slice_x * slice_y, MPI_DOUBLE,
 			  m_rank - 1, 1325, MPI_COMM_WORLD, &requests[1]);
 			}
 
-			//если не последний процесс
 			if(m_rank != p_count - 1){
-			MPI_Irecv(keep_l_slice + (slice_z - 1) *  slice_x * slice_y, slice_x * slice_y, MPI_DOUBLE,
-			  m_rank + 1, 1325, MPI_COMM_WORLD, &requests[1]);
+				MPI_Irecv(keep_l_slice + (slice_z - 1) *  slice_x * slice_y, slice_x * slice_y, MPI_DOUBLE,
+					m_rank + 1, 1325, MPI_COMM_WORLD, &requests[0]);
 			}
 
-	///////////
+			//Передача вниз
+			if(m_rank != p_count - 1){
+				MPI_Isend(keep_l_slice + (slice_z - 2) *  slice_x * slice_y, slice_x * slice_y, MPI_DOUBLE,
+			  		m_rank + 1, 1324, MPI_COMM_WORLD, &requests[3]);
+			}
+
+			if(m_rank != 0){
+				MPI_Irecv(keep_l_slice, slice_x * slice_y, MPI_DOUBLE,
+			 		 m_rank - 1, 1324, MPI_COMM_WORLD, &requests[2]);
+			}
 		}
-	
 
-
-
-
-
-		//showSlice(keep_l_slice, slice_x, slice_y , slice_z);
-		//printf("-----------------------\n");
+		
 		//TODO выполнение локальных вычислений
 
 		for (int i = 2 ; i < (slice_z - 1); ++i)
@@ -362,53 +295,33 @@ int main(int argc , char** argv){
 			doIteration(l_slice, keep_l_slice, i, slice_x, slice_y , hx , hy , hz, MULTI_KF, model_space);
 		}
 
-		
-
+			
 
 		if(p_count != 1){
-			MPI_Status statuses[2];
-			MPI_Waitall(2, requests, statuses);
+			if(m_rank != p_count - 1){
+				MPI_Wait(requests , statuses);
+			}
+			if(m_rank != 0){
+				MPI_Wait(requests + 1 , statuses + 1);
+			}
+			if(m_rank != 0){
+				MPI_Wait(requests + 2 , statuses + 2);
+			}
+			if(m_rank != p_count - 1){
+				MPI_Wait(requests + 3 , statuses + 3);
+			}
 		}
-		
 
 
-		//if(1 == m_rank)
-		//	showSlice(keep_l_slice, slice_x, slice_y , slice_z);
-		//return 0;
-
-		//showSlice(keep_l_slice, slice_x, slice_y , slice_z);
-		//return 0;
-
-
-
-		double diff = getMaxDiff(l_slice, keep_l_slice, slice_x, slice_y, slice_z);
+		double min_diff , diff = getMaxDiff(l_slice, keep_l_slice, slice_x, slice_y, slice_z);
 		int end = 0;
 
+		MPI_Allreduce(&diff, &min_diff, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
 
-		MPI_Gather(&diff, 1, MPI_DOUBLE, fi_diff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	
-		if(m_rank == 0){
-			for (int i = 0; i < p_count; ++i)
-			{
-				if(fi_diff[i] > diff){
-					diff = fi_diff[i];
-				}
-			}
-			if(diff < E){
-				end = 1;
-			}
+		if(min_diff < E){
+			end = 1;
 		}
 
-
-		//printf("LOL2\n");
-		MPI_Bcast(&end , 1 , MPI_INT, 0 , MPI_COMM_WORLD);
-		
-
-
-		/*if(m_rank == 0){
-			printf("%lf --- %d\n", diff , count);
-
-		}*/
 		if(end){
 			end_t = MPI_Wtime();
 			if(0 == m_rank){
@@ -418,12 +331,6 @@ int main(int argc , char** argv){
 			break;
 		}
 
-
-
-		//return 0;
-
-		//теперь в keep_l_slice все ок
-
 		double* ptr = keep_l_slice;
 		keep_l_slice = l_slice;
 		l_slice = ptr;
@@ -431,15 +338,11 @@ int main(int argc , char** argv){
 
 	free(l_slice);
 	free(keep_l_slice);
+	free(counts);
+	free(displs);
+
+
 	MPI_Finalize();
-
-		//TODO проверка точности между вновь вычесленными занчениями и реальной функцией
-
-
-		//TODO выполнение локальных вычислений
-
-
-		//TODO асинхронная передача
 	return 0;
 }
 

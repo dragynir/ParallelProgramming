@@ -225,7 +225,7 @@ int main(int argc , char** argv){
 	}
 
 
-	if(rankx == 0 && ranky == 0){
+	/*if(rankx == 0 && ranky == 0){
 		for (int i = 0; i < sizey; ++i)
 		{
 			printf("d_a: %d ,  s_a: %d , ", displs_A[i] , sendcounts_A[i]);
@@ -243,7 +243,7 @@ int main(int argc , char** argv){
 		showMatrix(matrix_b , MATRIX_B_ROW , MATRIX_B_COL);
 
 		printf("\n");
-	}
+	}*/
 
 
 	//return 0;
@@ -367,7 +367,7 @@ int main(int argc , char** argv){
 
 
 	if(rankx == 0 && ranky == 0){
-		showMatrix(matrix_res , MATRIX_A_ROW , MATRIX_B_COL);
+		//showMatrix(matrix_res , MATRIX_A_ROW , MATRIX_B_COL);
 	}
 
 
@@ -389,6 +389,8 @@ int main(int argc , char** argv){
 		free(matrix_res);
 	}
 
+
+	printf("SOME\n");
 
 	
 	MPI_Finalize();

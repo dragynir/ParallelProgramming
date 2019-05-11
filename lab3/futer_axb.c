@@ -32,17 +32,6 @@ void fillMatrixB(double* m , int col , int row){
 }
 
 
-void showMatrix(double* A , int r , int c){
-	for (int i = 0; i < r; ++i)
-	{
-		for (int j = 0; j < c; ++j)
-		{
-			printf("%lf ",	A[c * i + j]);
-		}
-		printf("\n");
-	}
-}
-
 
 
 void transpose(double* m , int col , int row){
@@ -116,9 +105,6 @@ int main(int argc , char** argv){
 	const int MATRIX_B_ROW = MATRIX_A_COL;
 	const int MATRIX_B_COL = atoi(argv[3]);
 
-	//printf("A: %d : %d , : B: %d : %d \n",MATRIX_A_ROW , MATRIX_A_COL , MATRIX_B_ROW , MATRIX_B_COL);
-
-
 
 	int dims[2]={0,0},periods[2]={0,0},coords[2],reorder=1;
 	int size,rank,sizey,sizex,ranky,rankx;
@@ -168,11 +154,6 @@ int main(int argc , char** argv){
 	double* sub_a = (double*)malloc(sizeof(double) * sub_a_col * extended_sub_r);
 
 
-
-
-
-
-
 	int splitB_per_proc = MATRIX_B_COL / sizex; 
 	int over_splitB_per_proc = MATRIX_B_COL % sizex;
 	int extended_sub_c = splitB_per_proc;
@@ -193,14 +174,6 @@ int main(int argc , char** argv){
 
 	//матрица для результата локального вычисления
 	double* sub_dest = (double*)malloc(sizeof(double) * sub_a_row * sub_b_col);
-
-
-
-
-
-	/*int world_rank = 0;
-	MPI_Comm_rank(MPI_COMM_WORLD	, &world_rank);*/
-	
 
 
 	int remain_dims[2] = {0 , 1};
@@ -225,36 +198,11 @@ int main(int argc , char** argv){
 	}
 
 
-	if(rankx == 0 && ranky == 0){
-		for (int i = 0; i < sizey; ++i)
-		{
-			printf("d_a: %d ,  s_a: %d , ", displs_A[i] , sendcounts_A[i]);
-		}
-		printf("\n");
-		for (int i = 0; i < sizex; ++i)
-		{
-			printf("d_b: %d ,  s_b: %d , ", displs_B[i] , sendcounts_B[i]);
-		}
-		printf("\n");
-		printf("A:\n");
-		showMatrix(matrix_a , MATRIX_A_ROW , MATRIX_A_COL);
-
-		printf("B:\n");
-		showMatrix(matrix_b , MATRIX_B_ROW , MATRIX_B_COL);
-
-		printf("\n");
-	}
-
-
-	//return 0;
-
-
 	//создание типа для передачи A
 	MPI_Datatype type_cont_rowA;
 	MPI_Type_contiguous(MATRIX_A_COL , MPI_DOUBLE, &type_cont_rowA);
 	MPI_Type_commit(&type_cont_rowA);
 
-	//printf("%d %d\n", sub_a_col , extended_sub_r);
 
 	//только первый столбец => rankx = 0
 	if(rankx == 0){
@@ -262,20 +210,10 @@ int main(int argc , char** argv){
 		MPI_Scatterv(matrix_a , sendcounts_A , displs_A,
 				type_cont_rowA , sub_a , sub_a_col * extended_sub_r,
 				MPI_DOUBLE , 0 , col_comm);
-		//if(ranky == 2) showMatrix(sub_a , extended_sub_r , MATRIX_A_COL);
 	}
 
 
-	//return 0;
 
-	
-
-
-
-	//blocklength = в каждом процессе от sendcounts
-	//stride = MATRIX_B_COL - sendcounts
-	//lodtype = MPI_DOUBLE
-	//
 	MPI_Datatype type_vectorB;
 	MPI_Aint stride = MATRIX_B_COL;
 	//int stride = MATRIX_B_COL;
@@ -295,38 +233,20 @@ int main(int argc , char** argv){
 		MPI_Scatterv(matrix_b, sendcounts_B, displs,
 				type_vectorB , sub_b , extended_sub_c * sub_b_row ,
 	 			MPI_DOUBLE , 0 , row_comm);	
-
-		//if(rankx == 0) showMatrix(sub_b , sub_b_row , extended_sub_c);
-
 	}
 
 
 
 
 	//передача матрицы sub_a
-	/*int m_row_rank = 0;
-	MPI_Comm_rank(row_comm , &m_row_rank);*/
-
 	MPI_Bcast(sub_a, sub_a_col * extended_sub_r , MPI_DOUBLE, 0 , row_comm);
 
 
 	//передача матрицы sub_b
-	/*int m_col_rank = 0;
-	MPI_Comm_rank(col_comm , &m_col_rank);*/
 	MPI_Bcast(sub_b, extended_sub_c * sub_b_row , MPI_DOUBLE, 0, col_comm);
-
-
-	//transpose(sub_b , extended_sub_c , sub_b_row);
 
 	//вычисление
 	multiMatrices(sub_a , sub_b , sub_dest ,  sub_a_col , sub_a_row , sub_b_col);
-
-
-
-	/*MPI_Type_create_resized(type_vectorB,
-                          0 ,
-                          sizeof(double) ,
-                          &type_vectorB);*/
 
 
 	MPI_Datatype type_send;
@@ -343,9 +263,6 @@ int main(int argc , char** argv){
 
 	MPI_Type_commit(&type_send);
 
-
-	//showMatrix(sub_dest , sub_a_row , sub_b_col);
-	//return 0;
 	for (int i = 0; i < size; ++i)
 	{
 		recvcounts[i] = 1;
@@ -363,12 +280,6 @@ int main(int argc , char** argv){
 	MPI_Gatherv(sub_dest , sub_a_row * sub_b_col , MPI_DOUBLE	,
 			matrix_res , recvcounts, displs, type_send	,
 			0, comm2d);
-
-
-
-	if(rankx == 0 && ranky == 0){
-		showMatrix(matrix_res , MATRIX_A_ROW , MATRIX_B_COL);
-	}
 
 
 	{

@@ -5,6 +5,8 @@
 #include<time.h>
 
 
+//58 : 58
+
 
 void dotProduct(double* a , double* b , int size , double* dest){
 	double s = 0;
