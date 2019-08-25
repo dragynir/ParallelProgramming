@@ -7,7 +7,7 @@
 
 
 
-//Request ЧТОТОНЕТАК
+
 
 #define E 10e-8
 #define A 10e+5

@@ -19,45 +19,17 @@ const int PROC_OUT = -1;
 typedef struct Task{
 	int time_mls;
 }task;
-//300 - 500
-//Hight balance
-//140 tasks
-//75410
-
-//Hight hard
-//140
-//562157
-
-
-//Medium balance
-//140
-//39738
-
-//Medium hard
-//140
-//64696
-
-
-//Low balance
-//140
-//41312
-
-//Low hard
-//140
-//38920
 
 
 
-
-//mpicxx dynamictasks.cpp -o a.out -std=c++11 -O3 -lpthread -mt_mpi
-
+//Убрать ненужные блокировки
 
 //std::this_thread::sleep_for(std::chrono::milliseconds(x));
 
 const int TAG_GET = 12;
 const int TAG_ANS = 21;
 int p_count, m_rank;
-int lvl;
+int lvl = 0;
 pthread_mutex_t mutex;
 pthread_t worker, listener, observer;
 
@@ -66,20 +38,19 @@ set<int> unAnsDied;
 deque<task> tasks;
 
 
-int PROVIDED_TASKS;
-const int MIN_V = 300, MAX_V = 500;
+const int MIN_V = 500, MAX_V = 1000;
 
-int globalWorkingTime;//будет учитываться позже во время балансировки задач
-int finishedTasks;
+int globalWorkingTime = 0;//будет учитываться позже во время балансировки задач
+int finishedTasks = 0;
 bool workEnd = false;
 
 
 
 /////////////////////////////////////////INIT
-void initTasksLow(int iter){
+void initTasksLow(int providedTasks, int iter){
 	task t;
-	int myTasksCount = PROVIDED_TASKS / p_count;
-	if(m_rank < PROVIDED_TASKS%p_count){
+	int myTasksCount = providedTasks / p_count;
+	if(m_rank < providedTasks%p_count){
 		++myTasksCount;
 	}
 	for (int i = 0; i < myTasksCount; ++i)
@@ -90,22 +61,16 @@ void initTasksLow(int iter){
 	//printf("Rank %d , %d\n", m_rank, myTasksCount);
 }
 
-
-
-void initTasksMedium(int iter){
+void initTasksMedium(int providedTasks, int iter){
 	if(p_count == 1){
-		initTasksLow(iter);
+		initTasksLow(providedTasks, iter);
 		return;
 	}
 	task t;
 	int myTasksCount = 0;
-
-	int d = (2 * PROVIDED_TASKS) / (p_count * (p_count - 1));
-	int lost = PROVIDED_TASKS - d * p_count * (p_count - 1) / 2;
-	if(m_rank < lost){
-		++myTasksCount;
-	}
-	if(m_rank < lost % p_count){
+	//арифметическая прогрессия(волна)
+	int d = (2 * providedTasks) / (p_count * (p_count - 1));
+	if(m_rank < ((2 * providedTasks) % (p_count * (p_count - 1))) - 1){
 		++myTasksCount;
 	}
 	myTasksCount+=(d * m_rank);
@@ -119,16 +84,16 @@ void initTasksMedium(int iter){
 }
 
 
-void initTasksHigh(int iter){
+void initTasksHigh(int providedTasks, int iter){
 	task t;
 
 	if(iter % p_count == m_rank){
-		for (int i = 0; i < PROVIDED_TASKS; ++i)
+		for (int i = 0; i < providedTasks; ++i)
 		{
 			t.time_mls = MIN_V + rand() % (MAX_V - MIN_V);
 			tasks.push_back(t);
 		}
-		//printf("Start rang: %d , %d\n", m_rank, PROVIDED_TASKS);
+		//printf("Start rang: %d , %d\n", m_rank, providedTasks);
 	}
 }
 
@@ -160,7 +125,7 @@ void* startWork(void* t){
 		}else if(lvl == 1 && tasks.empty()){
 			pthread_mutex_unlock(&mutex);
 			break;
-		}  
+		}
 
 		if(!tasks.empty()){
 			//printf("%d:%d\n",m_rank, tasks.size());
@@ -211,7 +176,6 @@ void* startObserv(void* t){
 	set<int>::iterator it;
 	while(true){
 		int tasks_count = 0;
-		//можно убрать этот блок
 		pthread_mutex_lock(&mutex);
 		if(workEnd){
 			pthread_mutex_unlock(&mutex);
@@ -219,9 +183,8 @@ void* startObserv(void* t){
 		}
 		tasks_count = tasks.size();
 		pthread_mutex_unlock(&mutex);
-		//можно убрать этот блок
 
-		if(tasks_count < PROVIDED_TASKS / p_count){
+		if(tasks_count < 2){
 			set<int> l_proc(proc);
 		
 			for (it=l_proc.begin(); it!=l_proc.end(); ++it){
@@ -232,8 +195,7 @@ void* startObserv(void* t){
 				MPI_Send(&tasks_count, 1, MPI_INT, i, TAG_GET, MPI_COMM_WORLD);
 				MPI_Recv(&res, 1, MPI_INT, i, TAG_ANS, MPI_COMM_WORLD, &status);
 				
-				if(res >= 0){
-					if(res == 0) continue;
+				if(res > 0){
 					task new_task;
 					new_task.time_mls = res;
 					pthread_mutex_lock(&mutex);
@@ -324,6 +286,9 @@ void* startListen(void* t){
 			continue;
 		}
 
+		/*if(res < 0){
+			printf("AHAHHAHHAHAH\n");
+		}*/
 
 		pthread_mutex_lock(&mutex);
 		//если завершил работу, но пришел запрос на задачи
@@ -334,7 +299,8 @@ void* startListen(void* t){
 			MPI_Send(&PROC_OUT, 1, MPI_INT, status.MPI_SOURCE, TAG_ANS, MPI_COMM_WORLD);
 			continue;
 		}
-		if(tasks.size() > res){
+		if(tasks.size() != 0){
+			//можно сделать проверку на то, чтобы не посылать задачку, если она одна
 			task send_task = tasks.back();
 			tasks.pop_back();
 			pthread_mutex_unlock(&mutex);	
@@ -359,21 +325,16 @@ int main(int argc, char** argv)
 
 	
 
-	if(argc!=5){
-		printf("Type tasks count than lvl than count of iterations.\n");
+	if(argc!=3){
+		printf("Type tasks count than lvl.\n");
 		return 0;
 	}
-	PROVIDED_TASKS = atoi(argv[1]);
+	int providedTasks = atoi(argv[1]);
 	lvl = atoi(argv[2]);
-	int type = atoi(argv[3]);
-	int iteration =  atoi(argv[4]);
 
 	int provided;
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
-	if(provided != MPI_THREAD_MULTIPLE){
-		printf("WRONG INIT\n");
-		return 0;
-	}
+	if(provided != MPI_THREAD_MULTIPLE)return 0;
 
 	MPI_Comm_size(MPI_COMM_WORLD , &p_count);
 	MPI_Comm_rank(MPI_COMM_WORLD , &m_rank);
@@ -381,7 +342,7 @@ int main(int argc, char** argv)
 
 	
 	if(m_rank == 0)
-		printf("Provided tasks:%d\n", PROVIDED_TASKS);
+		printf("Provided tasks:%d\n", providedTasks);
     
 	//атрибуты потока
     pthread_attr_t attrs;
@@ -398,11 +359,12 @@ int main(int argc, char** argv)
     	perror("Error in setting attributes");
    	 	abort();
     }
-    
-    
+
     std::chrono::time_point<std::chrono::system_clock> start, end;
-    int glTime = 0;
+	int iteration = 1;
 	while(iteration--){
+
+
 		for(int i = 0; i < p_count; ++i){
 			proc.insert(i);
 			unAnsDied.insert(i);
@@ -410,21 +372,15 @@ int main(int argc, char** argv)
 		proc.erase(m_rank);
 		unAnsDied.erase(m_rank);
 
-		switch(type){
-			case 0: initTasksLow(iteration);break;
-			case 1: initTasksMedium(iteration);break;
-			case 2: initTasksHigh(iteration);break;
-		}
 
-		//initTasksLow(iteration);
-		//initTasksMedium(iteration);
-		//initTasksHigh(iteration);
+		//initTasksLow(providedTasks, iteration);
+		//initTasksMedium(providedTasks, iteration);
+		initTasksHigh(providedTasks, iteration);
 
 
 		//printTasks();
 
 		start = std::chrono::system_clock::now();
-
 
 		//MPI_Barrier(MPI_COMM_WORLD);
 	    if(pthread_create(&worker, &attrs, startWork, 0)!=0)
@@ -455,7 +411,7 @@ int main(int argc, char** argv)
 	    	abort();
 	    }
 	    //printf("WAIT\n");
-	    //printf("rank:%d , tasks: %d\n",m_rank, finishedTasks);
+	    printf("rank:%d , tasks: %d\n",m_rank, finishedTasks);
 	    MPI_Barrier(MPI_COMM_WORLD);
 
 
@@ -470,16 +426,9 @@ int main(int argc, char** argv)
 
 	    MPI_Reduce(&finishedTasks, &done_tasks, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 	    MPI_Reduce(&elapsed, &total_time, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
-
 	    if(m_rank == 0){
-	    	if(done_tasks != PROVIDED_TASKS){
-	    		//исправить завершение только 0
-	    		printf("Miss tasks %d\n", done_tasks - PROVIDED_TASKS);
-	    		break;
-	    	}
-	    	glTime+=elapsed;
-	    	//printf("\nTotal Tasks: %d\n", done_tasks);
-	    	//printf("Total Time: %d\n", total_time);
+	    	printf("\nTotal Tasks: %d\n", done_tasks);
+	    	printf("Total Time: %d\n", total_time);
 	    }
 
 
@@ -491,9 +440,6 @@ int main(int argc, char** argv)
 	    	printf("TASK not empty\n");
 	    	break;
 	    }
-	}
-	if(m_rank == 0){
-		printf("Global time: %d\n", glTime);
 	}
 
 	

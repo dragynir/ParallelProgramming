@@ -47,8 +47,6 @@ void transpose(double* m , int col , int row){
 	}
 }
 
-
-
 void defineVarSets(int* displs , int* sendcounts , int per_proc ,
 	 int over , int rank_count ,  int coord_rank , int* start , int* end)
 	{
@@ -176,6 +174,7 @@ int main(int argc , char** argv){
 	double* sub_dest = (double*)malloc(sizeof(double) * sub_a_row * sub_b_col);
 
 
+
 	int remain_dims[2] = {0 , 1};
 	MPI_Comm row_comm , col_comm;
 	MPI_Cart_sub(comm2d, remain_dims, &row_comm);
@@ -204,6 +203,11 @@ int main(int argc , char** argv){
 	MPI_Type_commit(&type_cont_rowA);
 
 
+
+
+	double start_t = MPI_Wtime() , end_t = 0;
+
+
 	//только первый столбец => rankx = 0
 	if(rankx == 0){
 		//Рассылка матрицы A по первому столбцу
@@ -221,7 +225,7 @@ int main(int argc , char** argv){
 
 	MPI_Type_create_resized(type_vectorB,
                           0 ,
-                          sizeof(double) ,
+                          sizeof(double),
                           &type_vectorB);
 
 	MPI_Type_commit(&type_vectorB);
@@ -230,7 +234,7 @@ int main(int argc , char** argv){
 	
 
 	if(ranky == 0){
-		MPI_Scatterv(matrix_b, sendcounts_B, displs,
+		MPI_Scatterv(matrix_b, sendcounts_B, displs_B,
 				type_vectorB , sub_b , extended_sub_c * sub_b_row ,
 	 			MPI_DOUBLE , 0 , row_comm);	
 	}
@@ -250,7 +254,7 @@ int main(int argc , char** argv){
 
 
 	MPI_Datatype type_send;
-	stride = MATRIX_B_COL;//!!!!!!!
+	stride = MATRIX_B_COL;
 	MPI_Type_vector(extended_sub_r, extended_sub_c , stride, MPI_DOUBLE , &type_send);
 
 
@@ -282,6 +286,17 @@ int main(int argc , char** argv){
 			0, comm2d);
 
 
+
+	end_t = MPI_Wtime();
+
+	if(rankx == 0 && ranky == 0){
+		printf("Time taken: \n", end_t - start_t);
+		free(matrix_a);
+		free(matrix_b);
+		free(matrix_res);
+	}
+	
+
 	{
 		free(sendcounts_A);
 		free(displs_A);
@@ -289,12 +304,6 @@ int main(int argc , char** argv){
 		free(displs_B);
 		free(recvcounts);
 		free(displs);
-	}
-
-	if(rankx == 0 && ranky == 0){
-		free(matrix_a);
-		free(matrix_b);
-		free(matrix_res);
 	}
 
 

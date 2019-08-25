@@ -3,9 +3,10 @@
 #include<stdlib.h>
 #include<mpi.h>
 #include<time.h>
+
+
 #include<deque>
 #include<set>
-//for sleap
 #include <chrono>
 #include <thread>
 
@@ -19,40 +20,7 @@ const int PROC_OUT = -1;
 typedef struct Task{
 	int time_mls;
 }task;
-//300 - 500
-//Hight balance
-//140 tasks
-//75410
 
-//Hight hard
-//140
-//562157
-
-
-//Medium balance
-//140
-//39738
-
-//Medium hard
-//140
-//64696
-
-
-//Low balance
-//140
-//41312
-
-//Low hard
-//140
-//38920
-
-
-
-
-//mpicxx dynamictasks.cpp -o a.out -std=c++11 -O3 -lpthread -mt_mpi
-
-
-//std::this_thread::sleep_for(std::chrono::milliseconds(x));
 
 const int TAG_GET = 12;
 const int TAG_ANS = 21;
@@ -69,7 +37,6 @@ deque<task> tasks;
 int PROVIDED_TASKS;
 const int MIN_V = 300, MAX_V = 500;
 
-int globalWorkingTime;//будет учитываться позже во время балансировки задач
 int finishedTasks;
 bool workEnd = false;
 
@@ -87,7 +54,6 @@ void initTasksLow(int iter){
 		t.time_mls = MIN_V + rand() % (MAX_V - MIN_V);
 		tasks.push_back(t);
 	}
-	//printf("Rank %d , %d\n", m_rank, myTasksCount);
 }
 
 
@@ -115,7 +81,6 @@ void initTasksMedium(int iter){
 		t.time_mls = MIN_V + rand() % (MAX_V - MIN_V);
 		tasks.push_back(t);
 	}
-	//printf("Rank %d , %d\n", m_rank, myTasksCount);
 }
 
 
@@ -128,18 +93,9 @@ void initTasksHigh(int iter){
 			t.time_mls = MIN_V + rand() % (MAX_V - MIN_V);
 			tasks.push_back(t);
 		}
-		//printf("Start rang: %d , %d\n", m_rank, PROVIDED_TASKS);
 	}
 }
 
-
-
-void printTasks(){
-	for (int i = 0; i < tasks.size(); ++i)
-	{
-		//printf("Task %d: %d mls \n", i, tasks[i].time_mls);
-	}
-}
 /////////////////////////////////////////INIT
 
 
@@ -149,7 +105,6 @@ void printTasks(){
 /////////////////////////////////////////Worker
 
 void* startWork(void* t){
-	//deque<task>& tasks = *((deque<task>*)t);
 	while(true){
 		task* cur_task = nullptr;
 
@@ -160,10 +115,9 @@ void* startWork(void* t){
 		}else if(lvl == 1 && tasks.empty()){
 			pthread_mutex_unlock(&mutex);
 			break;
-		}  
+		}
 
 		if(!tasks.empty()){
-			//printf("%d:%d\n",m_rank, tasks.size());
 			cur_task = &tasks.front();
 			tasks.pop_front();
 		}
@@ -171,10 +125,7 @@ void* startWork(void* t){
 
 		if(cur_task != nullptr){
 			std::this_thread::sleep_for(std::chrono::milliseconds(cur_task->time_mls));
-			pthread_mutex_lock(&mutex);
-			//globalWorkingTime+=cur_task->time_mls;
 			++finishedTasks;
-			pthread_mutex_unlock(&mutex);
 		}
 	}
 	#ifdef DEBUG
@@ -211,7 +162,6 @@ void* startObserv(void* t){
 	set<int>::iterator it;
 	while(true){
 		int tasks_count = 0;
-		//можно убрать этот блок
 		pthread_mutex_lock(&mutex);
 		if(workEnd){
 			pthread_mutex_unlock(&mutex);
@@ -219,7 +169,6 @@ void* startObserv(void* t){
 		}
 		tasks_count = tasks.size();
 		pthread_mutex_unlock(&mutex);
-		//можно убрать этот блок
 
 		if(tasks_count < PROVIDED_TASKS / p_count){
 			set<int> l_proc(proc);
@@ -227,13 +176,13 @@ void* startObserv(void* t){
 			for (it=l_proc.begin(); it!=l_proc.end(); ++it){
     			int i = *it;
 				int res = 0;
-				//будет передавать кол-во ост задач
 
+
+				//передается кол-во оставшихся задач
 				MPI_Send(&tasks_count, 1, MPI_INT, i, TAG_GET, MPI_COMM_WORLD);
 				MPI_Recv(&res, 1, MPI_INT, i, TAG_ANS, MPI_COMM_WORLD, &status);
 				
-				if(res >= 0){
-					if(res == 0) continue;
+				if(res > 0){
 					task new_task;
 					new_task.time_mls = res;
 					pthread_mutex_lock(&mutex);
@@ -249,13 +198,12 @@ void* startObserv(void* t){
 			}//for
 
 
-			//за время опроса могли кончиться задачи
-			//поэтому проверим что их нет 
-			//для того чтобы не проводить еще один опрос
+			
 			pthread_mutex_lock(&mutex);
 			bool isEmpty = tasks.empty();
 			pthread_mutex_unlock(&mutex);
-			//Если никто не дал задач
+			//Если никто не отдал задач
+			//рассылка сообщения о завершении
 			if(isEmpty){
 				#ifdef DEBUG
 				printf("SENDING %d\n", m_rank);	
@@ -298,7 +246,6 @@ void* startListen(void* t){
 	} 
 	pthread_mutex_unlock(&mutex);
 	
-	//deque<task>& tasks = *((deque<task>*)t);
 	
 	MPI_Status status;
 	int count = 0;
@@ -310,7 +257,7 @@ void* startListen(void* t){
 
 		//это будет верно только тогда, когда процесс
 		//status.MPI_SOURCE отправит сообщение о завершении
-		//по завершению всех поток закончит исполнение
+		//при получении сообщений о завершении от всех поток закончит исполнение
 		if(res == PROC_OUT){
 			unAnsDied.erase(status.MPI_SOURCE);
 			if(unAnsDied.empty()){
@@ -323,7 +270,6 @@ void* startListen(void* t){
 			//с рангом status.MPI_SOURCE
 			continue;
 		}
-
 
 		pthread_mutex_lock(&mutex);
 		//если завершил работу, но пришел запрос на задачи
@@ -360,12 +306,12 @@ int main(int argc, char** argv)
 	
 
 	if(argc!=5){
-		printf("Type tasks count than lvl than count of iterations.\n");
+		printf("Type: tasks count, lvl, type, count of iterations.\n");
 		return 0;
 	}
 	PROVIDED_TASKS = atoi(argv[1]);
-	lvl = atoi(argv[2]);
-	int type = atoi(argv[3]);
+	lvl = atoi(argv[2]);//отключение балансировки(1), балансировка(0)
+	int type = atoi(argv[3]);//способ распределения задач(0,1,2)
 	int iteration =  atoi(argv[4]);
 
 	int provided;
@@ -399,10 +345,10 @@ int main(int argc, char** argv)
    	 	abort();
     }
     
-    
     std::chrono::time_point<std::chrono::system_clock> start, end;
     int glTime = 0;
 	while(iteration--){
+
 		for(int i = 0; i < p_count; ++i){
 			proc.insert(i);
 			unAnsDied.insert(i);
@@ -416,17 +362,9 @@ int main(int argc, char** argv)
 			case 2: initTasksHigh(iteration);break;
 		}
 
-		//initTasksLow(iteration);
-		//initTasksMedium(iteration);
-		//initTasksHigh(iteration);
-
-
-		//printTasks();
-
 		start = std::chrono::system_clock::now();
 
-
-		//MPI_Barrier(MPI_COMM_WORLD);
+		
 	    if(pthread_create(&worker, &attrs, startWork, 0)!=0)
 	    {
 	    	perror("Cannot create a thread worker");
@@ -454,17 +392,13 @@ int main(int argc, char** argv)
 	    	perror("Cannot join a thread");
 	    	abort();
 	    }
-	    //printf("WAIT\n");
-	    //printf("rank:%d , tasks: %d\n",m_rank, finishedTasks);
-	    MPI_Barrier(MPI_COMM_WORLD);
-
+	    
 
 	    end = std::chrono::system_clock::now();
 	    //seconds
 	    int elapsed = std::chrono::duration_cast<std::chrono::milliseconds>
                              (end-start).count();
 
-	    //printf("P\n");
 	    int done_tasks = 0;
 	    int total_time = 0;
 
@@ -473,9 +407,7 @@ int main(int argc, char** argv)
 
 	    if(m_rank == 0){
 	    	if(done_tasks != PROVIDED_TASKS){
-	    		//исправить завершение только 0
 	    		printf("Miss tasks %d\n", done_tasks - PROVIDED_TASKS);
-	    		break;
 	    	}
 	    	glTime+=elapsed;
 	    	//printf("\nTotal Tasks: %d\n", done_tasks);
@@ -485,10 +417,9 @@ int main(int argc, char** argv)
 
 	    workEnd = false;
 	    finishedTasks = 0;
-	    globalWorkingTime = 0;
 	    proc.clear();
 	    if(!tasks.empty()){
-	    	printf("TASK not empty\n");
+	    	printf("TASKS not empty\n");
 	    	break;
 	    }
 	}
@@ -496,13 +427,6 @@ int main(int argc, char** argv)
 		printf("Global time: %d\n", glTime);
 	}
 
-	
-    
-    
- 
-    
-    //printf("gone\n");
-  
 	MPI_Finalize();
 
     return 0;
